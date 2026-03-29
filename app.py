@@ -508,7 +508,21 @@ elif page == "⚙️ 数据管理":
                  ("rankings", "积分排名"), ("players", "球员信息")]
     )
 
-                if st.button("✅ 确认并保存赛事结果", use_container_width=True):
+                if st.button("📥 导出为 JSON"):
+        data = db.export_data(export_type[0])
+        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        st.download_button(
+            label="下载 JSON 文件",
+            data=json_str.encode('utf-8'),
+            file_name=f"golf_data_{export_type[0]}_{datetime.now().strftime('%Y%m%d')}.json",
+            mime="application/json"
+        )
+
+                # 保存按钮
+            st.divider()
+            st.subheader("💾 保存到数据库")
+
+            if st.button("✅ 确认并保存赛事结果", use_container_width=True):
                 try:
                     with st.spinner("正在保存..."):
                         # 准备数据
@@ -522,8 +536,6 @@ elif page == "⚙️ 数据管理":
                             'results': points_results
                         }
                         
-                        st.write("准备保存的数据:", event_data)  # 调试
-                        
                         # 保存
                         saved_event = db.save_event(event_data)
                         
@@ -532,14 +544,14 @@ elif page == "⚙️ 数据管理":
                         
                         # 清除导入的数据
                         del st.session_state['imported_data']
-                        
+                        if 'points_results' in st.session_state:
+                            del st.session_state['points_results']
+                        if 'event_data' in st.session_state:
+                            del st.session_state['event_data']
                 except Exception as e:
                     st.error(f"❌ 保存失败: {str(e)}")
                     import traceback
                     st.code(traceback.format_exc())
-        )
-
-    st.divider()
 
     # 关于
     st.subheader("ℹ️ 关于")
