@@ -300,18 +300,35 @@ elif page == "📊 计算积分":
             st.subheader("💾 保存到数据库")
 
             if st.button("✅ 确认并保存赛事结果", use_container_width=True):
-                # 保存
-                saved_event = db.save_event(st.session_state['event_data'])
-
-                st.success(f"✅ 赛事「{event_name}」已成功保存！")
-                st.balloons()
-
-                # 清除导入的数据
-                del st.session_state['imported_data']
-                if 'points_results' in st.session_state:
-                    del st.session_state['points_results']
-                if 'event_data' in st.session_state:
-                    del st.session_state['event_data']
+                try:
+                    with st.spinner("正在保存..."):
+                        # 准备数据
+                        event_data = {
+                            'date': event_date.isoformat(),
+                            'name': event_name,
+                            'type': event_type[0],
+                            'is_special': is_special,
+                            'special_type': special_type[0] if is_special else '',
+                            'course': event_course,
+                            'results': points_results
+                        }
+                        
+                        # 保存
+                        saved_event = db.save_event(event_data)
+                        
+                        st.success(f"✅ 赛事「{event_name}」已成功保存到 Google Sheets！")
+                        st.balloons()
+                        
+                        # 清除导入的数据
+                        del st.session_state['imported_data']
+                        if 'points_results' in st.session_state:
+                            del st.session_state['points_results']
+                        if 'event_data' in st.session_state:
+                            del st.session_state['event_data']
+                except Exception as e:
+                    st.error(f"❌ 保存失败: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
 # ========== 积分榜 ==========
 elif page == "🏆 积分榜":
@@ -508,7 +525,7 @@ elif page == "⚙️ 数据管理":
                  ("rankings", "积分排名"), ("players", "球员信息")]
     )
 
-                if st.button("📥 导出为 JSON"):
+    if st.button("📥 导出为 JSON"):
         data = db.export_data(export_type[0])
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         st.download_button(
@@ -518,40 +535,7 @@ elif page == "⚙️ 数据管理":
             mime="application/json"
         )
 
-                # 保存按钮
-            st.divider()
-            st.subheader("💾 保存到数据库")
-
-            if st.button("✅ 确认并保存赛事结果", use_container_width=True):
-                try:
-                    with st.spinner("正在保存..."):
-                        # 准备数据
-                        event_data = {
-                            'date': event_date.isoformat(),
-                            'name': event_name,
-                            'type': event_type[0],
-                            'is_special': is_special,
-                            'special_type': special_type[0] if is_special else '',
-                            'course': event_course,
-                            'results': points_results
-                        }
-                        
-                        # 保存
-                        saved_event = db.save_event(event_data)
-                        
-                        st.success(f"✅ 赛事「{event_name}」已成功保存！")
-                        st.balloons()
-                        
-                        # 清除导入的数据
-                        del st.session_state['imported_data']
-                        if 'points_results' in st.session_state:
-                            del st.session_state['points_results']
-                        if 'event_data' in st.session_state:
-                            del st.session_state['event_data']
-                except Exception as e:
-                    st.error(f"❌ 保存失败: {str(e)}")
-                    import traceback
-                    st.code(traceback.format_exc())
+    st.divider()
 
     # 关于
     st.subheader("ℹ️ 关于")
