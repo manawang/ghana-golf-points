@@ -175,7 +175,7 @@ elif page == "📤 导入比赛结果":
                     # 数据预览
                     st.subheader("📋 数据预览")
                     preview_df = preview_data(results, max_rows=20)
-                    st.dataframe(preview_df, use_container_width=True)
+                    st.dataframe(preview_df, width='stretch')
 
                     # 保存到 session state
                     st.session_state['imported_data'] = results
@@ -221,6 +221,7 @@ elif page == "📊 计算积分":
         is_special = st.checkbox("⭐ 特殊赛事（积分×2）",
                                   help="队长杯或年终月度大赛")
 
+        special_type = ("", "")  # 默认空值
         if is_special:
             special_type = st.selectbox(
                 "特殊赛事类型",
@@ -251,9 +252,9 @@ elif page == "📊 计算积分":
 
             # 高亮显示
             def highlight_champions(row):
-                if row.get('is_gross_champion', False):
+                if row.get('总杆冠军') == '✓':
                     return ['background-color: gold; color: black'] * len(row)
-                elif row.get('net_rank') == 1:
+                elif row.get('净杆排名') == 1:
                     return ['background-color: #d4edda'] * len(row)
                 return [''] * len(row)
 
@@ -340,7 +341,7 @@ elif page == "🏆 积分榜":
             })
 
         df_rankings = pd.DataFrame(display_data)
-        st.dataframe(df_rankings, use_container_width=True, hide_index=True)
+        st.dataframe(df_rankings, width='stretch', hide_index=True)
 
         # 全部排名
         st.divider()
@@ -365,7 +366,7 @@ elif page == "🏆 积分榜":
             })
 
         df_all = pd.DataFrame(all_data)
-        st.dataframe(df_all, use_container_width=True, hide_index=True)
+        st.dataframe(df_all, width='stretch', hide_index=True)
 
         # 导出按钮
         st.divider()
@@ -426,7 +427,7 @@ elif page == "📈 统计报表":
 
             if history:
                 df_history = pd.DataFrame(history)
-                st.dataframe(df_history, use_container_width=True)
+                st.dataframe(df_history, width='stretch')
             else:
                 st.info("暂无参赛记录")
 
