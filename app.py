@@ -275,7 +275,17 @@ elif page == "📊 计算积分":
                 return [''] * len(row)
             
             # 创建 DataFrame
-            df_results = pd.DataFrame(points_results)
+            df_results = pd.DataFrame([
+    {
+        'name': r['name'],
+        'gross': r['gross'],
+        'net': r['net'],
+        'net_rank': r['net_rank'],
+        'is_gross_champion': r.get('is_gross_champion', False),  # 确保这行存在
+        # ... 其他列
+    }
+    for r in points_results
+])
             
             # 选择显示的列并重命名
             display_df = df_results[[
@@ -306,7 +316,7 @@ elif page == "📊 计算积分":
             st.divider()
             st.subheader("💾 保存到数据库")
             
-            if st.button("✅ 确认并保存赛事结果", use_container_width=True):
+            if st.button("✅ 确认并保存赛事结果", use_container_width='stretch'):
                 # 准备赛事数据
                 event_data = {
                     'date': event_date.isoformat(),
