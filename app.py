@@ -268,7 +268,7 @@ elif page == "📊 计算积分":
                     '基础分': r.get('base_points', 0),
                     '奖励分': r.get('bonus_points', 0),
                     '总积分': r.get('total_points', 0),
-                    '总杆冠军': '✓' if r.get('总杆冠军', False) else ''
+                    '总杆冠军': '✓' if r.get('is_gross_champion', False) else ''
                 }
                 for r in points_results
             ])
@@ -299,7 +299,7 @@ elif page == "📊 计算积分":
             st.divider()
             st.subheader("💾 保存到数据库")
 
-            if st.button("✅ 确认并保存赛事结果", use_container_width='strech'):
+            if st.button("✅ 确认并保存赛事结果", use_container_width=True):
                 # 保存
                 saved_event = db.save_event(st.session_state['event_data'])
 
