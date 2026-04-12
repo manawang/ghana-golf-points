@@ -9,7 +9,7 @@ import json
 
 # 导入自定义模块
 from points_calculator import calculate_event_points
-from golflive_import import process_golflive_file, validate_data, preview_data
+from golflive_import import process_golflive_file
 from database import Database
 
 # 页面配置
@@ -28,34 +28,45 @@ def get_database():
 try:
     db = get_database()
 except Exception as e:
-    st.error("数据库连接失败，请检查配置")
+    st.error(f"数据库连接失败: {e}")
     st.stop()
 
 # ========== 页面样式 ==========
 st.markdown("""
 <style>
     .stDataFrame { font-size: 14px; }
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ========== 侧边栏 ==========
 with st.sidebar:
-    st.title("加纳中华高球队")
+    st.title("⛳ 加纳中华高球队")
     st.caption("Ghana Chinese Golf Association")
+    st.divider()
     page = st.radio("📋 功能菜单", 
         ["🏠 首页", "📤 导入比赛结果", "📊 计算积分", "🏆 积分榜", "📋 赛事记录"])
 
 # ========== 首页 ==========
 if page == "🏠 首页":
     st.title("⛳ 加纳中华高球队积分系统")
-    stats = db.get_statistics()
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏌️ 参赛球员", stats['total_players'])
-    col2.metric("📅 已办赛事", stats['total_events'])
-    col3.metric("🎯 总积分", stats['total_points_issued'])
-    col4.metric("⭐ 特殊赛事", stats['special_events'])
-
+    try:
+        stats = db.get_statistics()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("🏌️ 参赛球员", stats.get('total_players', 0))
+        col2.metric("📅 已办赛事", stats.get('total_events', 0))
+        col3.metric("🎯 总积分", stats.get('total_points_issued', 0))
+        col4.metric("⭐ 特殊赛事", stats.get('special_events', 0))
+    except Exception as e:
+        st.error(f"获取统计信息失败: {e}")
+    
     st.divider()
     st.subheader("🚀 快速开始")
     col1, col2 = st.columns(2)
@@ -68,13 +79,29 @@ if page == "🏠 首页":
 elif page == "📤 导入比赛结果":
     st.title("📤 导入 GolfLive 比赛结果")
     
-    uploaded_file = st.file_uploader("上传比赛结果文件", type=['csv', 'xlsx', 'xls'])
+    uploaded_file = st.file_uploader(
+        "上传比赛结果文件 (CSV/Excel)", 
+        type=['csv', 'xlsx', 'xls']
+    )
     
     if uploaded_file:
         try:
             results = process_golflive_file(uploaded_file)
             st.session_state['imported_data'] = results
             st.success(f"✅ 成功导入 {len(results)} 条球员记录")
+            
+            # 预览数据
+            preview_df = pd.DataFrame([
+                {
+                    '姓名': r['name'],
+                    '总杆': r.get('gross', r.get('gross_score', '-')),
+                    '净杆': r.get('net', r.get('net_score', '-')),
+                    '排名': r.get('net_rank', '-')
+                }
+                for r in results[:10]
+            ])
+            st.dataframe(preview_df, use_container_width=True)
+            
             st.info("💡 请切换到「计算积分」页面继续")
         except Exception as e:
             st.error(f"❌ 导入失败: {e}")
@@ -88,24 +115,31 @@ elif page == "📊 计算积分":
         st.stop()
     
     results = st.session_state['imported_data']
+    st.caption(f"已导入 {len(results)} 名球员数据")
     
     # 赛事信息
     col1, col2 = st.columns(2)
     with col1:
         event_date = st.date_input("📅 比赛日期", datetime.now())
-        event_name = st.text_input("🏷️ 赛事名称", 
-            value=f"{event_date.month}月月例赛" if datetime.now().day > 15 else "周例赛")
+        event_name = st.text_input(
+            "🏷️ 赛事名称", 
+            value=f"{event_date.month}月月例赛"
+        )
     with col2:
-        event_type = st.selectbox("🏆 赛事类型", 
+        event_type = st.selectbox(
+            "🏆 赛事类型", 
             options=[("monthly", "月度大赛"), ("weekly", "周例赛")],
-            format_func=lambda x: x[1])
+            format_func=lambda x: x[1]
+        )
         is_special = st.checkbox("⭐ 特殊赛事（积分×2）")
     
     special_type = ""
     if is_special:
-        special_type = st.selectbox("特殊赛事类型",
+        special_type = st.selectbox(
+            "特殊赛事类型",
             options=[("captains_prize", "队长杯"), ("year_end", "年终月度大赛")],
-            format_func=lambda x: x[1])[0]
+            format_func=lambda x: x[1]
+        )[0]
     
     event_course = st.text_input("⛳ 比赛球场（可选）")
     
@@ -113,8 +147,15 @@ elif page == "📊 计算积分":
     if st.button("🚀 开始计算积分", type="primary", use_container_width=True):
         with st.spinner("正在计算积分..."):
             try:
-                points_results = calculate_event_points(results, event_type[0], is_special)
-                points_results.sort(key=lambda x: x['total_points'], reverse=True)
+                points_results = calculate_event_points(
+                    results, 
+                    event_type[0], 
+                    is_special
+                )
+                points_results.sort(
+                    key=lambda x: x.get('total_points', 0), 
+                    reverse=True
+                )
                 
                 # 显示结果
                 display_df = pd.DataFrame([
@@ -129,7 +170,7 @@ elif page == "📊 计算积分":
                     }
                     for r in points_results
                 ])
-                st.dataframe(display_df, width='stretch')
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
                 
                 # 保存到 session state
                 st.session_state['points_results'] = points_results
@@ -142,10 +183,12 @@ elif page == "📊 计算积分":
                     'course': event_course,
                     'results': points_results
                 }
-                st.success("✅ 积分计算完成！")
+                st.success("✅ 积分计算完成！请确认后保存")
                 
             except Exception as e:
                 st.error(f"❌ 计算失败: {e}")
+                import traceback
+                st.error(traceback.format_exc())
     
     # 保存按钮
     if 'event_data' in st.session_state:
@@ -154,74 +197,121 @@ elif page == "📊 计算积分":
         
         if st.button("✅ 确认并保存赛事结果", use_container_width=True):
             try:
-                with st.spinner("正在保存..."):
+                with st.spinner("正在保存到 Google Sheets..."):
                     saved_event = db.save_event(st.session_state['event_data'])
                     st.success(f"✅ 赛事「{saved_event['name']}」已成功保存！")
                     st.balloons()
                     
-                    # 清理
+                    # 清理 session state
                     del st.session_state['imported_data']
                     del st.session_state['points_results']
                     del st.session_state['event_data']
             except Exception as e:
                 st.error(f"❌ 保存失败: {e}")
+                import traceback
+                st.error(traceback.format_exc())
 
 # ========== 积分榜 ==========
 elif page == "🏆 积分榜":
     st.title("🏆 年度积分排行榜")
     
-    rankings = db.get_rankings()
-    
-    if not rankings:
-        st.info("📭 暂无积分数据")
-    else:
-        # TOP 10
-        st.subheader("🥇 TOP 10")
-        top10 = rankings[:10]
-        display_data = []
-        for i, r in enumerate(top10):
-            emoji = {1: "🥇", 2: "🥈", 3: "🥉"}.get(r['rank'], str(r['rank']))
-            display_data.append({
-                '排名': emoji,
-                '姓名': r['name'],
-                '总积分': r['total_points'],
+    try:
+        rankings = db.get_rankings()
+        
+        if not rankings:
+            st.info("📭 暂无积分数据")
+        else:
+            # TOP 10
+            st.subheader("🥇 TOP 10")
+            top10 = rankings[:10]
+            display_data = []
+            for i, r in enumerate(top10):
+                emoji = {1: "🥇", 2: "🥈", 3: "🥉"}.get(r['rank'], f"{r['rank']}")
+                display_data.append({
+                    '排名': emoji,
+                    '姓名': r['name'],
+                    '总积分': r['total_points'],
+                    '参赛次数': r['events_count'],
+                    '周赛冠军': r.get('weekly_wins', 0),
+                    '月赛冠军': r.get('monthly_wins', 0)
+                })
+            st.dataframe(
+                pd.DataFrame(display_data), 
+                use_container_width=True, 
+                hide_index=True
+            )
+            
+            # 全部排名
+            st.divider()
+            st.subheader("📋 完整排名")
+            all_data = [{
+                '排名': r['rank'], 
+                '姓名': r['name'], 
+                '总积分': r['total_points'], 
                 '参赛次数': r['events_count'],
                 '周赛冠军': r.get('weekly_wins', 0),
                 '月赛冠军': r.get('monthly_wins', 0)
-            })
-        st.dataframe(pd.DataFrame(display_data), width='stretch', hide_index=True)
-        
-        # 全部排名
-        st.divider()
-        st.subheader("📋 完整排名")
-        all_data = [{'排名': r['rank'], '姓名': r['name'], '总积分': r['total_points'], 
-                     '参赛次数': r['events_count']} for r in rankings]
-        st.dataframe(pd.DataFrame(all_data), width='stretch', hide_index=True)
+            } for r in rankings]
+            st.dataframe(
+                pd.DataFrame(all_data), 
+                use_container_width=True, 
+                hide_index=True
+            )
+    except Exception as e:
+        st.error(f"获取排行榜失败: {e}")
 
 # ========== 赛事记录 ==========
 elif page == "📋 赛事记录":
     st.title("📋 赛事记录")
     
-    events = db.get_events()
-    
-    if not events:
-        st.info("📭 暂无赛事记录")
-    else:
-        for event in events:
-            with st.expander(f"📅 {event.get('date')} - {event.get('name')}"):
-                st.write(f"类型: {'月度大赛' if event.get('type') == 'monthly' else '周例赛'}")
-                st.write(f"参赛人数: {len(event.get('results', []))}")
+    try:
+        events = db.get_events()
+        
+        if not events:
+            st.info("📭 暂无赛事记录")
+        else:
+            for event in events:
+                event_name = event.get('name', '未知赛事')
+                event_date = event.get('date', '未知日期')
+                event_type = '月度大赛' if event.get('type') == 'monthly' else '周例赛'
+                is_special = event.get('is_special', False)
+                special_tag = " ⭐" if is_special else ""
                 
-                # 显示前五名
-                results = sorted(event.get('results', []), 
-                               key=lambda x: x.get('total_points', 0), reverse=True)
-                if results:
-                    top5 = [{'排名': r.get('net_rank'), '姓名': r['name'], 
-                            '积分': r.get('total_points')} for r in results[:5]]
-                    st.dataframe(pd.DataFrame(top5), hide_index=True)
-                
-                # 删除按钮
-                if st.button("🗑️ 删除", key=f"del_{event.get('id')}"):
-                    if db.delete_event(event.get('id')):
-                        st.success("已删除")
-                        st.rerun()
+                with st.expander(f"📅 {event_date} - {event_name}{special_tag} ({event_type})"):
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"**赛事类型:** {event_type}")
+                        st.write(f"**参赛人数:** {len(event.get('results', []))}")
+                        if event.get('course'):
+                            st.write(f"**球场:** {event.get('course')}")
+                    
+                    # 显示前五名
+                    results = sorted(
+                        event.get('results', []), 
+                        key=lambda x: x.get('total_points', 0), 
+                        reverse=True
+                    )
+                    if results:
+                        top5 = [{
+                            '排名': r.get('net_rank', '-'), 
+                            '姓名': r['name'], 
+                            '积分': r.get('total_points', 0)
+                        } for r in results[:5]]
+                        st.dataframe(
+                            pd.DataFrame(top5), 
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+                    
+                    with col2:
+                        event_id = event.get('id')
+                        if st.button("🗑️ 删除", key=f"del_{event_id}"):
+                            if db.delete_event(event_id):
+                                st.success("已删除")
+                                st.rerun()
+                            else:
+                                st.error("删除失败")
+    except Exception as e:
+        st.error(f"获取赛事记录失败: {e}")
+        import traceback
+        st.error(traceback.format_exc())
