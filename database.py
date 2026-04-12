@@ -313,14 +313,31 @@ class Database:
         """获取排行榜"""
         rankings = self._get_all_records(self.rankings_ws)
         
+        # 过滤无效数据并转换类型
+        valid_rankings = []
+        for r in rankings:
+            try:
+                # 跳过表头行（name 为 'name' 或 total_points 为 'total_points'）
+                if r.get('name') == 'name' or str(r.get('total_points', '')) == 'total_points':
+                    continue
+                
+                # 确保数值字段正确转换
+                r['total_points'] = float(r.get('total_points', 0) or 0)
+                r['events_count'] = int(r.get('events_count', 0) or 0)
+                r['weekly_wins'] = int(r.get('weekly_wins', 0) or 0)
+                r['monthly_wins'] = int(r.get('monthly_wins', 0) or 0)
+                valid_rankings.append(r)
+            except (ValueError, TypeError):
+                continue
+        
         # 按积分排序
-        rankings.sort(key=lambda x: float(x.get('total_points', 0)), reverse=True)
+        valid_rankings.sort(key=lambda x: x['total_points'], reverse=True)
         
         # 添加排名
-        for i, r in enumerate(rankings, 1):
+        for i, r in enumerate(valid_rankings, 1):
             r['rank'] = i
         
-        return rankings
+        return valid_rankings
     
     def get_player_stats(self, name: str) -> Optional[Dict]:
         rankings = self.get_rankings()
