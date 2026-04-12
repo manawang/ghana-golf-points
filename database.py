@@ -156,10 +156,13 @@ class Database:
                     'updated_at': datetime.now().isoformat()
                 }
         
-        # 按积分排序
+        # 按积分排序（确保所有值为数值类型）
+        for r in rankings_dict.values():
+            r['total_points'] = float(r.get('total_points', 0) or 0)
+        
         sorted_rankings = sorted(
             rankings_dict.values(),
-            key=lambda x: x.get('total_points', 0),
+            key=lambda x: x['total_points'],
             reverse=True
         )
         
