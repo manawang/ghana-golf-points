@@ -122,9 +122,23 @@ class Database:
     def _update_rankings_batch(self, new_event: Dict):
         """批量更新排行榜 - 内存计算后一次性写入"""
         
-        # 读取现有排行榜
+        # 读取现有排行榜，过滤表头行
         rankings = self._get_all_records(self.rankings_ws)
-        rankings_dict = {r['name']: dict(r) for r in rankings}
+        rankings_dict = {}
+        for r in rankings:
+            name = r.get('name', '')
+            # 跳过表头行
+            if name == 'name' or str(r.get('total_points', '')) == 'total_points':
+                continue
+            # 安全转换数值
+            try:
+                r['total_points'] = float(r.get('total_points', 0) or 0)
+                r['events_count'] = int(r.get('events_count', 0) or 0)
+                r['weekly_wins'] = int(r.get('weekly_wins', 0) or 0)
+                r['monthly_wins'] = int(r.get('monthly_wins', 0) or 0)
+                rankings_dict[name] = r
+            except (ValueError, TypeError):
+                continue
         
         # 在内存中更新所有数据
         for result in new_event.get('results', []):
@@ -133,14 +147,14 @@ class Database:
             
             if name in rankings_dict:
                 record = rankings_dict[name]
-                record['total_points'] = float(record.get('total_points', 0)) + points
-                record['events_count'] = int(record.get('events_count', 0)) + 1
+                record['total_points'] += points
+                record['events_count'] += 1
                 
                 # 更新冠军次数
                 if new_event.get('type') == 'weekly' and result.get('net_rank') == 1:
-                    record['weekly_wins'] = int(record.get('weekly_wins', 0)) + 1
+                    record['weekly_wins'] += 1
                 if new_event.get('type') == 'monthly' and result.get('net_rank') == 1:
-                    record['monthly_wins'] = int(record.get('monthly_wins', 0)) + 1
+                    record['monthly_wins'] += 1
                 
                 record['updated_at'] = datetime.now().isoformat()
             else:
@@ -156,10 +170,7 @@ class Database:
                     'updated_at': datetime.now().isoformat()
                 }
         
-        # 按积分排序（确保所有值为数值类型）
-        for r in rankings_dict.values():
-            r['total_points'] = float(r.get('total_points', 0) or 0)
-        
+        # 按积分排序
         sorted_rankings = sorted(
             rankings_dict.values(),
             key=lambda x: x['total_points'],
