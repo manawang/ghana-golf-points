@@ -263,20 +263,41 @@ elif page == "🏆 积分榜":
 # ========== 赛事记录 ==========
 elif page == "📋 赛事记录":
     st.title("📋 赛事记录")
-    
+
     try:
-        events = db.get_events()
-        
-        if not events:
+        events = db.get_events() or []
+
+        # 防御性处理：如果数据库/表格临时返回重复 id，先按 id 去重，避免 Streamlit duplicate key。
+        # 注意：这只是页面层保护；重复数据仍应在 database 层清理，并检查 save_event 的 id 生成逻辑。
+        deduped_events = []
+        seen_event_ids = set()
+        duplicate_event_ids = []
+        for event in events:
+            event_id = event.get('id')
+            if event_id is not None:
+                if event_id in seen_event_ids:
+                    duplicate_event_ids.append(event_id)
+                    continue
+                seen_event_ids.add(event_id)
+            deduped_events.append(event)
+
+        if duplicate_event_ids:
+            duplicated = ", ".join(sorted(set(map(str, duplicate_event_ids))))
+            st.warning(
+                f"检测到重复赛事 ID：{duplicated}。页面已临时去重；"
+                "建议清理数据库/表格中的重复赛事，并检查 save_event 生成 id 的逻辑。"
+            )
+
+        if not deduped_events:
             st.info("📭 暂无赛事记录")
         else:
-            for event in events:
+            for idx, event in enumerate(deduped_events):
                 event_name = event.get('name', '未知赛事')
                 event_date = event.get('date', '未知日期')
                 event_type = '月度大赛' if event.get('type') == 'monthly' else '周例赛'
                 is_special = event.get('is_special', False)
                 special_tag = " ⭐" if is_special else ""
-                
+
                 with st.expander(f"📅 {event_date} - {event_name}{special_tag} ({event_type})"):
                     col1, col2 = st.columns([3, 1])
                     with col1:
@@ -284,7 +305,7 @@ elif page == "📋 赛事记录":
                         st.write(f"**参赛人数:** {len(event.get('results', []))}")
                         if event.get('course'):
                             st.write(f"**球场:** {event.get('course')}")
-                    
+
                     # 显示前五名
                     results = sorted(
                         event.get('results', []), 
@@ -302,15 +323,25 @@ elif page == "📋 赛事记录":
                             use_container_width=True, 
                             hide_index=True
                         )
-                    
+
                     with col2:
                         event_id = event.get('id')
-                        if st.button("🗑️ 删除", key=f"del_{event_id}"):
-                            if db.delete_event(event_id):
-                                st.success("已删除")
-                                st.rerun()
-                            else:
-                                st.error("删除失败")
+                        if event_id is None:
+                            st.caption("该记录缺少 id，无法删除")
+                        elif st.button(
+                            "🗑️ 删除",
+                            key=f"event_records_del_{event_id}_{idx}",
+                            use_container_width=True
+                        ):
+                            try:
+                                if db.delete_event(event_id):
+                                    st.success("已删除")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.error("删除失败")
+                            except Exception as delete_err:
+                                st.error(f"删除失败: {delete_err}")
     except Exception as e:
         st.error(f"获取赛事记录失败: {e}")
         import traceback
